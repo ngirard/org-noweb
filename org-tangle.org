@@ -1,0 +1,225 @@
+#+title: org-tangle
+#+author: Nicolas Girard
+#+email: nicolas dot girard at gmail dot com
+#+OPTIONS:   H:2 num:nil toc:nil
+
+
+=org-tangle= takes one or several [[http://orgmode.org][Org]] files as arguments and produces programs
+
+* Usage
+#+name: usage
+#+begin_src sh
+  org-tangle [options] file1.org [file2.org ...]
+#+end_src
+
+Options:
+#+tblname: toptions
+| -E EMACS       | Specify the Emacs executable. Default value is 'emacs24-nox'        |
+| -O OPTIONS     | Specify the options to pass to Emacs. Default value is '-Q --batch' |
+| -q             | Enable quick expansion of noweb references                          |
+|                | (see variable org-babel-use-quick-and-dirty-noweb-expansion).       |
+| -L ORGDIR      | Specify an alternate directory for Org libs.                        |
+| -l lang1,lang2 | List of languages which can be evaluated in Org buffers.            |
+|                | By default, only emacs-lisp is loaded                               |
+|                | (see variable org-babel-load-languages)                             |
+| -V             | Show version and exit                                               |
+
+* Source code
+#+header: :shebang "#!/usr/bin/env bash"
+#+begin_src sh :noweb tangle :tangle org-tangle :exports none
+  <<src>>
+#+end_src
+
+** Shell code
+:PROPERTIES:
+:noweb-sep: "\n\n"
+:END:
+*** Initial variables
+#+name: src
+#+begin_src sh
+  DIR=`pwd`
+  FILES=""
+  ORGDIR="/path/to/alternate/org-mode"
+  QUICK_EXPANSION=nil
+  EMACS=<<emacs>>
+  EMACS_OPTS="-Q --batch"
+  VERSION=0.1
+#+end_src
+
+=<<emacs>>= =
+#+name: emacs
+#+begin_src sh
+  emacs24-nox
+#+end_src
+
+*** Help function
+#+name: src
+#+begin_src sh
+  read -d '' help_string <<"EOF"
+  Usage: <<usage>>
+  
+  <<format-options(toptions,fmt="%-15s %s")>>
+  EOF
+
+  help () {
+    echo -ne "$help_string\n"
+  }
+#+end_src
+*** Main part
+Let's deal with command line options
+#+name: src
+#+begin_src sh
+  while getopts "hE:O:L:l:qV" option "$@"; do
+    case $option in
+      h) help && exit 0 ;;
+      E) EMACS="$OPTARG" ;;
+      O) EMACS_OPTS="$OPTARG" ;;
+      q) QUICK_EXPANSION=t ;;
+      l) LANGUAGES="$OPTARG" ;;
+      L) ORGDIR="$OPTARG" ;;
+      V) echo "$(basename $0) $VERSION" && exit 0 ;;
+    esac
+  done ; shift $((OPTIND -1))
+#+end_src
+
+We need at least one file as an argument
+#+name: src
+#+begin_src sh
+  [ "$1" ] || { help && exit 1; }
+#+end_src
+
+Wrap each argument in the code required to call tangle on it
+#+name: src
+#+begin_src sh
+  for i in $@; do
+        FILES="$FILES \"$i\""
+  done
+#+end_src
+
+Create a temporary file
+#+name: src
+#+begin_src sh
+  out=$(tempfile)
+#+end_src
+
+Now, execute emacs...
+#+begin_src sh :noweb-ref src :noweb-sep " "
+  $EMACS ${EMACS_OPTS} --eval "(progn
+    <<escape-quotes(elisp-code)>>)"
+#+end_src
+
+...saving its output to a temporary file...
+#+begin_src sh :noweb-ref src :noweb-sep "\n\n"
+  >${out} 2>&1
+#+end_src
+
+...and its return value.
+#+begin_src sh :noweb-ref src :noweb-sep "\n"
+  ret=$?
+#+end_src
+
+If things went fine, display the number of tangled blocs
+#+begin_src sh :noweb-ref src :noweb-sep "\n"
+  if [ ${ret} -eq 0 ]; then
+    grep -i tangled ${out}
+#+end_src
+
+Otherwise, display the whole output for the user to further investigate
+#+name: src
+#+begin_src sh
+  else
+    cat ${out}
+  fi
+#+end_src
+
+Finally, exit with the same value as Emacs
+#+name: src
+#+begin_src sh
+  exit ${ret}
+#+end_src
+** Elisp code
+#+name: elisp-code
+#+begin_src org :noweb yes :exports none
+  <<elisp>>
+#+end_src
+
+When =ORGDIR= actually exists, load Org libraries from this directory. Otherwise, we'll use the ones that ship with Emacs or were installed using =package.el=
+
+#+name: elisp
+#+begin_src emacs-lisp
+  (package-initialize)
+  (when (file-accessible-directory-p "$ORGDIR")
+     (add-to-list 'load-path (expand-file-name "$ORGDIR/lisp/"))
+     (add-to-list 'load-path (expand-file-name "$ORGDIR/contrib/lisp/" t)))
+#+end_src
+
+Require Org libs
+#+name: elisp
+#+begin_src emacs-lisp
+  (require 'org)
+  (require 'ob)
+  (require 'ob-tangle)
+#+end_src
+
+Set =org-babel-use-quick-and-dirty-noweb-expansion= to the value of =QUICK_EXPANSION=
+#+name: elisp
+#+begin_src emacs-lisp
+  (setq org-babel-use-quick-and-dirty-noweb-expansion ${QUICK_EXPANSION})
+#+end_src
+
+Do not require confirmation before evaluating code blocks
+#+name: elisp
+#+begin_src emacs-lisp
+  (setq org-confirm-babel-evaluate nil)
+#+end_src
+
+Load the languages specified via the =-l= option, if any
+#+name: elisp
+#+begin_src emacs-lisp
+  (when "$LANGUAGES"
+    (org-babel-do-load-languages
+      'org-babel-load-languages
+      (mapcar 
+        (lambda (str) (cons (make-symbol str) t))
+        (split-string "$LANGUAGES" ","))))
+#+end_src
+
+For each file in =FILES=...
+#+name: elisp
+#+begin_src emacs-lisp
+  (mapc (lambda (file)
+    <<elisp-func>>) '($FILES))
+#+end_src
+
+- open it within Emacs;
+  #+name: elisp-func
+  #+begin_src emacs-lisp
+    (find-file (expand-file-name file "$DIR"))
+  #+end_src
+- tangle it;
+  #+name: elisp-func
+  #+begin_src emacs-lisp
+    (org-babel-tangle)
+  #+end_src
+- then close it.
+  #+name: elisp-func
+  #+begin_src emacs-lisp
+    (kill-buffer)
+  #+end_src
+** Utility functions 
+=<<escape-quotes>>= =
+#+name: escape-quotes
+#+begin_src emacs-lisp :var str-val=""
+  (save-match-data
+    (replace-regexp-in-string "\"" "\\\\\"" str-val))
+#+end_src
+Used to escape the quotes within the elisp code before embedding it into the shell code, in order to preserve readability.
+
+=<<format-options>>= =
+#+name: format-options
+#+begin_src emacs-lisp :var table="" :var fmt="%s%s" :results value
+  (mapconcat 
+    (lambda (row)
+      (format fmt (car row) (cadr row))) table "\n")
+#+end_src
+Used to format the options table.

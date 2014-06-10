@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+
+DIR=`pwd`
+FILES=""
+ORGDIR="/path/to/alternate/org-mode"
+QUICK_EXPANSION=nil
+EMACS=emacs24-nox
+EMACS_OPTS="-Q --batch"
+FLAVOR=gfm
+VERSION=0.1
+
+read -d '' help_string <<"EOF"
+Usage: org-weave [options] file.org > document
+
+-E EMACS        Specify the Emacs executable. Default value is 'emacs24-nox'
+-O OPTIONS      Specify the options to pass to Emacs. Default value is '-Q --batch'
+-q              Enable quick expansion of noweb references
+                (see variable org-babel-use-quick-and-dirty-noweb-expansion).
+-L ORGDIR       Specify an alternate directory for Org libs.
+-f FORMAT       Specify the output format.
+                Currently, only 'gfm' (GitHub flavored Mardown) is supported.
+-V              Show version and exit
+EOF
+
+help () {
+  echo -ne "$help_string\n"
+}
+
+while getopts "hE:O:L:f:qV" option "$@"; do
+  case $option in
+    h) help && exit 0 ;;
+    E) EMACS="$OPTARG" ;;
+    O) EMACS_OPTS="$OPTARG" ;;
+    q) QUICK_EXPANSION=t ;;
+    f) FLAVOR="$OPTARG" ;;
+    L) ORGDIR="$OPTARG" ;;
+    V) echo "$(basename $0) $VERSION" && exit 0 ;;
+  esac
+done ; shift $((OPTIND -1))
+
+[ "$1" ] || { help && exit 1; }
+file="$1"
+
+[ "$FLAVOR" = "gfm" ] || { help && exit 1; }
+
+out=$(tempfile)
+
+$EMACS ${EMACS_OPTS} --eval "(progn
+  (package-initialize)
+  (when (file-accessible-directory-p \"$ORGDIR\")
+     (add-to-list 'load-path (expand-file-name \"$ORGDIR/lisp/\"))
+     (add-to-list 'load-path (expand-file-name \"$ORGDIR/contrib/lisp/\" t)))
+  (require 'ox-gfm)
+  (setq org-babel-use-quick-and-dirty-noweb-expansion ${QUICK_EXPANSION})
+  (setq org-confirm-babel-evaluate nil)
+  (find-file (expand-file-name \"$file\" \"$DIR\"))
+  (princ (org-export-as 'gfm)))"

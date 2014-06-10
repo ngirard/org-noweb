@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+
+DIR=`pwd`
+FILES=""
+ORGDIR="/path/to/alternate/org-mode"
+QUICK_EXPANSION=nil
+EMACS=emacs24-nox
+EMACS_OPTS="-Q --batch"
+VERSION=0.1
+
+read -d '' help_string <<"EOF"
+Usage: org-tangle [options] file1.org [file2.org ...]
+
+-E EMACS        Specify the Emacs executable. Default value is 'emacs24-nox'
+-O OPTIONS      Specify the options to pass to Emacs. Default value is '-Q --batch'
+-q              Enable quick expansion of noweb references
+                (see variable org-babel-use-quick-and-dirty-noweb-expansion).
+-L ORGDIR       Specify an alternate directory for Org libs.
+-l lang1,lang2  List of languages which can be evaluated in Org buffers.
+                By default, only emacs-lisp is loaded
+                (see variable org-babel-load-languages)
+-V              Show version and exit
+EOF
+
+help () {
+  echo -ne "$help_string\n"
+}
+
+while getopts "hE:O:L:l:qV" option "$@"; do
+  case $option in
+    h) help && exit 0 ;;
+    E) EMACS="$OPTARG" ;;
+    O) EMACS_OPTS="$OPTARG" ;;
+    q) QUICK_EXPANSION=t ;;
+    l) LANGUAGES="$OPTARG" ;;
+    L) ORGDIR="$OPTARG" ;;
+    V) echo "$(basename $0) $VERSION" && exit 0 ;;
+  esac
+done ; shift $((OPTIND -1))
+
+[ "$1" ] || { help && exit 1; }
+
+for i in $@; do
+      FILES="$FILES \"$i\""
+done
+
+out=$(tempfile)
+
+$EMACS ${EMACS_OPTS} --eval "(progn
+  (package-initialize)
+  (when (file-accessible-directory-p \"$ORGDIR\")
+     (add-to-list 'load-path (expand-file-name \"$ORGDIR/lisp/\"))
+     (add-to-list 'load-path (expand-file-name \"$ORGDIR/contrib/lisp/\" t)))
+  (require 'org)
+  (require 'ob)
+  (require 'ob-tangle)
+  (setq org-babel-use-quick-and-dirty-noweb-expansion ${QUICK_EXPANSION})
+  (setq org-confirm-babel-evaluate nil)
+  (when \"$LANGUAGES\"
+    (org-babel-do-load-languages
+      'org-babel-load-languages
+      (mapcar 
+        (lambda (str) (cons (make-symbol str) t))
+        (split-string \"$LANGUAGES\" \",\"))))
+  (mapc (lambda (file)
+    (find-file (expand-file-name file \"$DIR\"))
+    (org-babel-tangle)
+    (kill-buffer)) '($FILES)))" >${out} 2>&1
+
+ret=$?
+if [ ${ret} -eq 0 ]; then
+  grep -i tangled ${out}
+else
+  cat ${out}
+fi
+
+exit ${ret}

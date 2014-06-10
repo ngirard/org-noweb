@@ -1,0 +1,176 @@
+#+title: org-weave
+#+author: Nicolas Girard
+#+email: nicolas dot girard at gmail dot com
+#+OPTIONS:   H:2 num:nil toc:nil
+
+
+=org-weave= takes an [[http://orgmode.org][Org]] file as an argument and produces, on standard output, source code for typeset documentation.
+
+Currently, the only format supported is =gfm= ([[http://github.github.com/github-flavored-markdown/][GitHub flavored Markdown]]).
+
+* Usage
+#+name: usage
+#+begin_src sh
+  org-weave [options] file.org > document
+#+end_src
+
+Options:
+#+tblname: toptions
+| -E EMACS   | Specify the Emacs executable. Default value is 'emacs24-nox'        |
+| -O OPTIONS | Specify the options to pass to Emacs. Default value is '-Q --batch' |
+| -q         | Enable quick expansion of noweb references                          |
+|            | (see variable org-babel-use-quick-and-dirty-noweb-expansion).       |
+| -L ORGDIR  | Specify an alternate directory for Org libs.                        |
+| -f FORMAT  | Specify the output format.                                          |
+|            | Currently, only 'gfm' (GitHub flavored Mardown) is supported.       |
+| -V         | Show version and exit                                               |
+
+
+
+* Source code
+#+header: :shebang "#!/usr/bin/env bash"
+#+begin_src sh :noweb tangle :tangle org-weave :exports none
+  <<src>>
+#+end_src
+
+** Shell code
+:PROPERTIES:
+:noweb-sep: "\n\n"
+:END:
+*** Initial variables
+#+name: src
+#+begin_src sh
+  DIR=`pwd`
+  FILES=""
+  ORGDIR="/path/to/alternate/org-mode"
+  QUICK_EXPANSION=nil
+  EMACS=<<emacs>>
+  EMACS_OPTS="-Q --batch"
+  FLAVOR=gfm
+  VERSION=0.1
+#+end_src
+
+=<<emacs>>= =
+#+name: emacs
+#+begin_src sh
+  emacs24-nox
+#+end_src
+
+*** Help function
+#+name: src
+#+begin_src sh
+  read -d '' help_string <<"EOF"
+  Usage: <<usage>>
+  
+  <<format-options(toptions,fmt="%-15s %s")>>
+  EOF
+
+  help () {
+    echo -ne "$help_string\n"
+  }
+#+end_src
+*** Main part
+Let's deal with command line options
+#+name: src
+#+begin_src sh
+  while getopts "hE:O:L:f:qV" option "$@"; do
+    case $option in
+      h) help && exit 0 ;;
+      E) EMACS="$OPTARG" ;;
+      O) EMACS_OPTS="$OPTARG" ;;
+      q) QUICK_EXPANSION=t ;;
+      f) FLAVOR="$OPTARG" ;;
+      L) ORGDIR="$OPTARG" ;;
+      V) echo "$(basename $0) $VERSION" && exit 0 ;;
+    esac
+  done ; shift $((OPTIND -1))
+#+end_src
+
+We need a file as an argument
+#+name: src
+#+begin_src sh
+  [ "$1" ] || { help && exit 1; }
+  file="$1"
+#+end_src
+
+For now, only gfm is supported
+#+name: src
+#+begin_src sh
+  [ "$FLAVOR" = "gfm" ] || { help && exit 1; }
+#+end_src
+
+Create a temporary file
+#+name: src
+#+begin_src sh
+  out=$(tempfile)
+#+end_src
+
+Now, execute emacs...
+#+begin_src sh :noweb-ref src :noweb-sep " "
+  $EMACS ${EMACS_OPTS} --eval "(progn
+    <<escape-quotes(elisp-code)>>)"
+#+end_src
+
+** Elisp code
+#+name: elisp-code
+#+begin_src org :noweb yes :exports none
+  <<elisp>>
+#+end_src
+
+When =ORGDIR= actually exists, load Org libraries from this directory. Otherwise, we'll use the ones that ship with Emacs or were installed using =package.el=
+
+#+name: elisp
+#+begin_src emacs-lisp
+  (package-initialize)
+  (when (file-accessible-directory-p "$ORGDIR")
+     (add-to-list 'load-path (expand-file-name "$ORGDIR/lisp/"))
+     (add-to-list 'load-path (expand-file-name "$ORGDIR/contrib/lisp/" t)))
+#+end_src
+
+Require the necessary libs (only =ox-gfm= for now)
+#+name: elisp
+#+begin_src emacs-lisp
+  (require 'ox-gfm)
+#+end_src
+
+Set =org-babel-use-quick-and-dirty-noweb-expansion= to the value of =QUICK_EXPANSION=
+#+name: elisp
+#+begin_src emacs-lisp
+  (setq org-babel-use-quick-and-dirty-noweb-expansion ${QUICK_EXPANSION})
+#+end_src
+
+Do not require confirmation before evaluating code blocks
+#+name: elisp
+#+begin_src emacs-lisp
+  (setq org-confirm-babel-evaluate nil)
+#+end_src
+
+Open the file within emacs;
+#+name: elisp
+#+begin_src emacs-lisp
+  (find-file (expand-file-name "$file" "$DIR"))
+#+end_src
+
+export it
+#+name: elisp
+#+begin_src emacs-lisp
+  (princ (org-export-as 'gfm))
+#+end_src
+
+** Utility functions 
+=<<escape-quotes>>= =
+#+name: escape-quotes
+#+begin_src emacs-lisp :var str-val=""
+  (save-match-data
+    (replace-regexp-in-string "\"" "\\\\\"" str-val))
+#+end_src
+Used to escape the quotes within the elisp code before embedding it into the shell code, in order to preserve readability.
+
+=<<format-options>>= =
+#+name: format-options
+#+begin_src emacs-lisp :var table="" :var fmt="%s%s" :results value
+  (mapconcat 
+    (lambda (row)
+      (format fmt (car row) (cadr row))) table "\n")
+#+end_src
+Used to format the options table.
