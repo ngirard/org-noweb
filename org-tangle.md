@@ -222,7 +222,7 @@ Do not require confirmation before evaluating code blocks
 Load the languages specified via the `-l` option, if any
 
 ```lisp
-(when "$LANGUAGES"
+(unless (equal "$LANGUAGES" "")
   (org-babel-do-load-languages
     'org-babel-load-languages
     (mapcar 

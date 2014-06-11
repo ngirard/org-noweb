@@ -56,7 +56,7 @@ $EMACS ${EMACS_OPTS} --eval "(progn
   (require 'ob-tangle)
   (setq org-babel-use-quick-and-dirty-noweb-expansion ${QUICK_EXPANSION})
   (setq org-confirm-babel-evaluate nil)
-  (when \"$LANGUAGES\"
+  (unless (equal \"$LANGUAGES\" \"\")
     (org-babel-do-load-languages
       'org-babel-load-languages
       (mapcar 
