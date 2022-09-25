@@ -99,7 +99,7 @@ Wrap each argument in the code required to call tangle on it
 Create a temporary file
 #+name: src
 #+begin_src sh
-  out=$(tempfile)
+  out=$(mktemp)
 #+end_src
 
 Now, execute emacs...

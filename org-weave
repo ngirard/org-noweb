@@ -43,7 +43,7 @@ file="$1"
 
 [ "$FLAVOR" = "gfm" ] || { help && exit 1; }
 
-out=$(tempfile)
+out=$(mktemp)
 
 $EMACS ${EMACS_OPTS} --eval "(progn
   (package-initialize)
