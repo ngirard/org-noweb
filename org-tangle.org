@@ -49,7 +49,7 @@ Options:
 =<<emacs>>= =
 #+name: emacs
 #+begin_src sh
-  emacs24-nox
+  emacs
 #+end_src
 
 *** Help function
