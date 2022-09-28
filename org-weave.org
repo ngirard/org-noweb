@@ -102,7 +102,7 @@ For now, only gfm is supported
 Create a temporary file
 #+name: src
 #+begin_src sh
-  out=$(tempfile)
+  out=$(mktemp)
 #+end_src
 
 Now, execute emacs...

@@ -4,7 +4,7 @@ DIR=`pwd`
 FILES=""
 ORGDIR="/path/to/alternate/org-mode"
 QUICK_EXPANSION=nil
-EMACS=emacs24-nox
+EMACS=emacs
 EMACS_OPTS="-Q --batch"
 VERSION=0.1
 

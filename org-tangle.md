@@ -145,7 +145,7 @@ Options:
     Create a temporary file
     
     ```sh
-    out=$(tempfile)
+    out=$(mktemp)
     ```
     
     Now, execute emacs&#x2026;

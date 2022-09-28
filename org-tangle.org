@@ -49,7 +49,7 @@ Options:
 =<<emacs>>= =
 #+name: emacs
 #+begin_src sh
-  emacs24-nox
+  emacs
 #+end_src
 
 *** Help function
@@ -99,7 +99,7 @@ Wrap each argument in the code required to call tangle on it
 Create a temporary file
 #+name: src
 #+begin_src sh
-  out=$(tempfile)
+  out=$(mktemp)
 #+end_src
 
 Now, execute emacs...
